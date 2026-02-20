@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WSDL 1.1 Document for CalculatorService
+  =========================================
+  WSDL (Web Services Description Language) is an XML-based contract that
+  formally describes a SOAP web service. It tells clients:
+    - What operations are available
+    - What data types are used (input/output)
+    - How to communicate (SOAP binding)
+    - Where the service is hosted (endpoint URL)
+
+  A WSDL 1.1 document is structured in five main sections:
+    1. <types>      — XSD schema definitions for data structures
+    2. <message>    — Abstract input/output message definitions
+    3. <portType>   — Abstract interface (operations list)
+    4. <binding>    — Concrete protocol binding (SOAP 1.1 here)
+    5. <service>    — Physical network location (endpoint URL)
+-->
+<definitions
+  name="CalculatorService"
+  targetNamespace="http://calculator.example.com/"
+  xmlns="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:tns="http://calculator.example.com/"
+  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+
+  <!-- ================================================================
+       SECTION 1: TYPES
+       Defines the XML Schema (XSD) data structures exchanged by the
+       service. This is the strongly-typed contract — both the client
+       and server must agree on these structures.
+       ================================================================ -->
+  <types>
+    <xsd:schema targetNamespace="http://calculator.example.com/">
+
+      <!--
+        CalculateRequest: sent by the client to request a calculation.
+          - operation : the arithmetic operation ("ADD", "SUBTRACT",
+                        "MULTIPLY", "DIVIDE")
+          - a         : the first operand (double-precision float)
+          - b         : the second operand (double-precision float)
+      -->
+      <xsd:element name="CalculateRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="operation" type="xsd:string"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>
+                  Arithmetic operation to perform.
+                  Accepted values: ADD, SUBTRACT, MULTIPLY, DIVIDE
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="a" type="xsd:double"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>First operand (left-hand side).</xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="b" type="xsd:double"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Second operand (right-hand side).</xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <!--
+        CalculateResponse: returned by the server after performing the
+        calculation.
+          - result    : the computed numeric result (0.0 on error)
+          - operation : echoes back the operation that was performed
+          - error     : empty string on success; error message otherwise
+                        (e.g. "Division by zero is undefined")
+      -->
+      <xsd:element name="CalculateResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="result" type="xsd:double"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>
+                  Computed result of the operation.
+                  Will be 0.0 if an error occurred.
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="operation" type="xsd:string"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Operation that was performed (echoed back).</xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="error" type="xsd:string"
+              minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>
+                  Error description. Empty string if successful.
+                  Example: "Division by zero is undefined"
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+    </xsd:schema>
+  </types>
+
+  <!-- ================================================================
+       SECTION 2: MESSAGES
+       Abstract definitions that associate a name with a typed part.
+       Each message corresponds to one direction of communication.
+       In document/literal style, each message has exactly one <part>
+       referencing an element from the <types> section.
+       ================================================================ -->
+
+  <!--
+    CalculateRequestMsg: the message the client sends.
+    "element" attribute points to the XSD element defined above.
+  -->
+  <message name="CalculateRequestMsg">
+    <part name="parameters" element="tns:CalculateRequest"/>
+  </message>
+
+  <!--
+    CalculateResponseMsg: the message the server returns.
+  -->
+  <message name="CalculateResponseMsg">
+    <part name="parameters" element="tns:CalculateResponse"/>
+  </message>
+
+  <!-- ================================================================
+       SECTION 3: PORT TYPE
+       An abstract interface (similar to a Java interface or a Python
+       ABC). Lists the available operations with their input/output
+       messages. No protocol details here — purely abstract.
+       ================================================================ -->
+  <portType name="CalculatorPort">
+    <!--
+      "calculate" operation:
+        - input  → client sends CalculateRequestMsg
+        - output → server replies with CalculateResponseMsg
+      This is a standard request/response MEP
+      (Message Exchange Pattern).
+    -->
+    <operation name="calculate">
+      <documentation>
+        Performs an arithmetic operation on two double-precision
+        floating-point numbers. Supported operations: ADD, SUBTRACT,
+        MULTIPLY, DIVIDE.
+      </documentation>
+      <input  message="tns:CalculateRequestMsg"/>
+      <output message="tns:CalculateResponseMsg"/>
+    </operation>
+  </portType>
+
+  <!-- ================================================================
+       SECTION 4: BINDING
+       Binds the abstract portType to a concrete protocol.
+       Here we use SOAP 1.1 over HTTP with "document/literal" style.
+
+       Binding styles:
+         - document/literal : the SOAP Body contains a literal XML
+                              document matching the XSD schema.
+                              WS-I Basic Profile compliant. Preferred.
+         - rpc/encoded      : uses SOAP encoding rules. Legacy style.
+       ================================================================ -->
+  <binding name="CalculatorBinding" type="tns:CalculatorPort">
+
+    <!--
+      soap:binding declares SOAP 1.1 over HTTP.
+      transport="http://schemas.xmlsoap.org/soap/http" means the
+      underlying transport is HTTP.
+    -->
+    <soap:binding
+      style="document"
+      transport="http://schemas.xmlsoap.org/soap/http"/>
+
+    <operation name="calculate">
+      <!--
+        soapAction: an HTTP header value that some servers use for
+        routing. Here it identifies the calculate operation.
+      -->
+      <soap:operation soapAction="http://calculator.example.com/calculate"/>
+
+      <input>
+        <!--
+          use="literal" means the SOAP Body XML must conform exactly
+          to the XSD schema — no SOAP encoding transformations applied.
+        -->
+        <soap:body use="literal"/>
+      </input>
+
+      <output>
+        <soap:body use="literal"/>
+      </output>
+
+    </operation>
+  </binding>
+
+  <!-- ================================================================
+       SECTION 5: SERVICE
+       The physical deployment details: where to actually send HTTP
+       requests. This is the only section that changes when the same
+       WSDL contract is deployed to a different environment.
+       ================================================================ -->
+  <service name="CalculatorService">
+    <documentation>
+      A simple arithmetic web service demonstrating SOAP/WSDL concepts.
+      Supports ADD, SUBTRACT, MULTIPLY, and DIVIDE operations on
+      double-precision floating-point numbers.
+    </documentation>
+    <port name="CalculatorPort" binding="tns:CalculatorBinding">
+      <!--
+        The endpoint URL where SOAP requests must be sent via HTTP POST.
+      -->
+      <soap:address location="http://localhost:8080/calculator"/>
+    </port>
+  </service>
+
+</definitions>

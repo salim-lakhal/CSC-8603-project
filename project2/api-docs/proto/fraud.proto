@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package com.insurance.fraud;
+
+option java_package = "com.insurance.fraud.proto";
+option java_outer_classname = "FraudProto";
+option java_multiple_files = true;
+
+service FraudDetectionService {
+  rpc AssessFraudRisk (FraudAssessmentRequest) returns (FraudAssessmentResponse);
+  rpc StreamRiskUpdates (FraudAssessmentRequest) returns (stream RiskUpdate);
+}
+
+message FraudAssessmentRequest {
+  string claim_id = 1;
+  string policy_number = 2;
+  double estimated_amount = 3;
+  string claim_type = 4;
+  string incident_date = 5;
+  int32 previous_claims_count = 6;
+}
+
+message FraudAssessmentResponse {
+  string claim_id = 1;
+  RiskLevel risk_level = 2;
+  double risk_score = 3;
+  string assessment_reason = 4;
+  bool requires_investigation = 5;
+}
+
+message RiskUpdate {
+  string message = 1;
+  double current_score = 2;
+}
+
+enum RiskLevel {
+  LOW = 0;
+  MEDIUM = 1;
+  HIGH = 2;
+  CRITICAL = 3;
+}

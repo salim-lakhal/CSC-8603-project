@@ -1,0 +1,151 @@
+openapi: 3.1.0
+info:
+  title: Eligibility Service
+  description: |
+    Determines whether a claim is eligible for processing based on the estimated
+    claim amount relative to the maximum coverage threshold of $50,000.
+    Claims at or below this threshold receive a high eligibility score (0.95).
+    Claims above the threshold are flagged as ineligible (score 0.3).
+  version: 1.0.0
+  contact:
+    name: Insurance Claim Processing System
+
+servers:
+  - url: http://localhost:8084
+    description: Local development server
+
+tags:
+  - name: Eligibility
+    description: Operations for checking claim eligibility
+
+paths:
+  /eligibility/check:
+    post:
+      tags:
+        - Eligibility
+      summary: Check claim eligibility
+      description: |
+        Evaluates whether a given claim is eligible for processing.
+        The decision is based on the estimated claim amount:
+        - Amount <= $50,000: eligible=true, eligibilityScore=0.95
+        - Amount > $50,000:  eligible=false, eligibilityScore=0.3
+      operationId: checkEligibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityRequest'
+            examples:
+              eligibleClaim:
+                summary: Eligible claim (within coverage)
+                value:
+                  claimId: "CLM-2024-001"
+                  policyNumber: "POL-123456"
+                  claimType: "PROPERTY_DAMAGE"
+                  estimatedAmount: 30000.0
+              ineligibleClaim:
+                summary: Ineligible claim (exceeds coverage)
+                value:
+                  claimId: "CLM-2024-002"
+                  policyNumber: "POL-789012"
+                  claimType: "PROPERTY_DAMAGE"
+                  estimatedAmount: 75000.0
+      responses:
+        '200':
+          description: Eligibility check completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+              examples:
+                eligible:
+                  summary: Eligible claim response
+                  value:
+                    eligible: true
+                    eligibilityScore: 0.95
+                    reason: "Claim amount is within the maximum coverage limit of $50000.0."
+                    maxCoverage: 50000.0
+                ineligible:
+                  summary: Ineligible claim response
+                  value:
+                    eligible: false
+                    eligibilityScore: 0.3
+                    reason: "Claim amount of $75000.0 exceeds the maximum coverage limit of $50000.0."
+                    maxCoverage: 50000.0
+        '400':
+          description: Invalid request - validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    EligibilityRequest:
+      type: object
+      required:
+        - claimId
+        - policyNumber
+        - claimType
+        - estimatedAmount
+      properties:
+        claimId:
+          type: string
+          description: Unique identifier for the claim
+          example: "CLM-2024-001"
+        policyNumber:
+          type: string
+          description: The insurance policy number associated with the claim
+          example: "POL-123456"
+        claimType:
+          type: string
+          description: Category of the insurance claim
+          example: "PROPERTY_DAMAGE"
+        estimatedAmount:
+          type: number
+          format: double
+          description: Estimated financial value of the claim in USD
+          minimum: 0.01
+          example: 30000.0
+
+    EligibilityResponse:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+          description: Whether the claim is eligible for processing
+        eligibilityScore:
+          type: number
+          format: double
+          description: Numeric score representing eligibility confidence (0.0 to 1.0)
+        reason:
+          type: string
+          description: Explanation of the eligibility decision
+        maxCoverage:
+          type: number
+          format: double
+          description: Maximum coverage amount applicable to this claim type
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time

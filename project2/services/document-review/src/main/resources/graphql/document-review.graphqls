@@ -1,0 +1,37 @@
+type Document {
+  id: ID!
+  claimId: String!
+  documentType: DocumentType!
+  fileName: String!
+  status: DocumentStatus!
+  reviewNotes: String
+  reviewedAt: String
+  valid: Boolean!
+}
+
+enum DocumentType {
+  POLICE_REPORT
+  MEDICAL_RECORD
+  REPAIR_ESTIMATE
+  IDENTITY_PROOF
+  INSURANCE_CARD
+  PHOTO_EVIDENCE
+}
+
+enum DocumentStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  REQUIRES_RESUBMISSION
+}
+
+type Query {
+  getDocument(id: ID!): Document
+  getDocumentsByClaimId(claimId: String!): [Document!]!
+  getPendingDocuments: [Document!]!
+}
+
+type Mutation {
+  submitDocument(claimId: String!, documentType: DocumentType!, fileName: String!): Document!
+  reviewDocument(id: ID!, status: DocumentStatus!, reviewNotes: String): Document!
+}

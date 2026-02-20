@@ -1,0 +1,337 @@
+# ============================================================
+# Insurance Claim Processing System — Docker Compose
+# ============================================================
+#
+# NOTE: Each service requires a Dockerfile at services/{name}/Dockerfile
+#
+# Standard Dockerfile for Spring Boot services:
+#   FROM openjdk:21-jre-slim
+#   WORKDIR /app
+#   COPY target/*.jar app.jar
+#   EXPOSE {port}
+#   ENTRYPOINT ["java", "-jar", "app.jar"]
+#
+# Before running, build each service's JAR with:
+#   mvn clean package -DskipTests
+# then run:
+#   docker-compose up --build
+# ============================================================
+
+version: "3.9"
+
+services:
+
+  # ----------------------------------------------------------
+  # claim-submission  |  REST  |  port 8081
+  # Entry point for all new insurance claims. Accepts claim
+  # payloads and dispatches them downstream.
+  # ----------------------------------------------------------
+  claim-submission:
+    build:
+      context: ./services/claim-submission
+    container_name: insurance-claim-submission
+    image: insurance/claim-submission:latest
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # identity-verification  |  SOAP/WSDL  |  port 8082
+  # Verifies claimant identity against external registries
+  # using a SOAP/WSDL contract.
+  # ----------------------------------------------------------
+  identity-verification:
+    build:
+      context: ./services/identity-verification
+    container_name: insurance-identity-verification
+    image: insurance/identity-verification:latest
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # policy-validation  |  REST  |  port 8083
+  # Validates that the submitted claim is covered under the
+  # claimant's active insurance policy.
+  # ----------------------------------------------------------
+  policy-validation:
+    build:
+      context: ./services/policy-validation
+    container_name: insurance-policy-validation
+    image: insurance/policy-validation:latest
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      claim-submission:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # fraud-detection  |  gRPC  |  port 9090
+  # Runs ML-backed fraud scoring on claim data over gRPC.
+  # An auxiliary HTTP health endpoint is exposed on port 9091.
+  # ----------------------------------------------------------
+  fraud-detection:
+    build:
+      context: ./services/fraud-detection
+    container_name: insurance-fraud-detection
+    image: insurance/fraud-detection:latest
+    ports:
+      - "9090:9090"   # gRPC
+      - "9091:9091"   # HTTP health endpoint
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9091/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      claim-submission:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # eligibility  |  REST  |  port 8084
+  # Determines whether the claimant meets all eligibility
+  # requirements, combining policy and identity results.
+  # ----------------------------------------------------------
+  eligibility:
+    build:
+      context: ./services/eligibility
+    container_name: insurance-eligibility
+    image: insurance/eligibility:latest
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      policy-validation:
+        condition: service_healthy
+      identity-verification:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # document-review  |  GraphQL  |  port 8085
+  # Exposes a GraphQL API for querying and mutating
+  # claim-related documents (photos, reports, invoices).
+  # ----------------------------------------------------------
+  document-review:
+    build:
+      context: ./services/document-review
+    container_name: insurance-document-review
+    image: insurance/document-review:latest
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      claim-submission:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # expert-assessment  |  REST  |  port 8086
+  # Assigns claims to domain experts and aggregates their
+  # assessments once fraud and eligibility checks pass.
+  # ----------------------------------------------------------
+  expert-assessment:
+    build:
+      context: ./services/expert-assessment
+    container_name: insurance-expert-assessment
+    image: insurance/expert-assessment:latest
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      fraud-detection:
+        condition: service_healthy
+      eligibility:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # compensation  |  REST  |  port 8087
+  # Calculates the compensation amount based on the expert
+  # assessment and policy coverage limits.
+  # ----------------------------------------------------------
+  compensation:
+    build:
+      context: ./services/compensation
+    container_name: insurance-compensation
+    image: insurance/compensation:latest
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      expert-assessment:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # payment-authorization  |  REST  |  port 8088
+  # Authorizes and initiates the financial payment transfer
+  # after compensation amounts are confirmed.
+  # ----------------------------------------------------------
+  payment-authorization:
+    build:
+      context: ./services/payment-authorization
+    container_name: insurance-payment-authorization
+    image: insurance/payment-authorization:latest
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      compensation:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # notification  |  REST  |  port 8089
+  # Sends email/SMS/push notifications to claimants at each
+  # milestone of the claim lifecycle.
+  # ----------------------------------------------------------
+  notification:
+    build:
+      context: ./services/notification
+    container_name: insurance-notification
+    image: insurance/notification:latest
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      payment-authorization:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+  # ----------------------------------------------------------
+  # claim-tracking  |  GraphQL  |  port 8090
+  # Provides a GraphQL API for real-time status queries on
+  # any claim, aggregating state from all upstream services.
+  # ----------------------------------------------------------
+  claim-tracking:
+    build:
+      context: ./services/claim-tracking
+    container_name: insurance-claim-tracking
+    image: insurance/claim-tracking:latest
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: -Xmx256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      claim-submission:
+        condition: service_healthy
+    networks:
+      - claim-network
+    restart: unless-stopped
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  claim-network:
+    driver: bridge
+    name: insurance-claim-network

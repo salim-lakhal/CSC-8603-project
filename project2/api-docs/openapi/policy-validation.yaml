@@ -1,0 +1,154 @@
+openapi: 3.1.0
+info:
+  title: Policy Validation Service
+  description: |
+    Validates insurance policy numbers against coverage rules.
+    A policy number matching the pattern POL-[0-9]{6} is considered ACTIVE
+    with a coverage amount of $50,000. All other formats yield EXPIRED status.
+  version: 1.0.0
+  contact:
+    name: Insurance Claim Processing System
+
+servers:
+  - url: http://localhost:8083
+    description: Local development server
+
+tags:
+  - name: Policy Validation
+    description: Operations for validating insurance policies
+
+paths:
+  /policies/validate:
+    post:
+      tags:
+        - Policy Validation
+      summary: Validate an insurance policy
+      description: |
+        Validates a policy number to determine whether it is active and eligible
+        for claim processing. Returns the policy status, coverage amount, and
+        a human-readable validation message.
+      operationId: validatePolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyValidationRequest'
+            examples:
+              validPolicy:
+                summary: Valid active policy
+                value:
+                  policyNumber: "POL-123456"
+                  claimantName: "Alice Martin"
+                  claimType: "PROPERTY_DAMAGE"
+              invalidPolicy:
+                summary: Invalid / expired policy
+                value:
+                  policyNumber: "INVALID-999"
+                  claimantName: "Bob Smith"
+                  claimType: "MEDICAL"
+      responses:
+        '200':
+          description: Validation result returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyValidationResponse'
+              examples:
+                activePolicy:
+                  summary: Active policy response
+                  value:
+                    valid: true
+                    policyStatus: "ACTIVE"
+                    coverageAmount: 50000.0
+                    message: "Policy is active and eligible for claims. Coverage amount: $50000.0"
+                expiredPolicy:
+                  summary: Expired policy response
+                  value:
+                    valid: false
+                    policyStatus: "EXPIRED"
+                    coverageAmount: 0.0
+                    message: "Policy number INVALID-999 does not match a valid active policy format."
+        '400':
+          description: Invalid request body - missing or blank required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    PolicyValidationRequest:
+      type: object
+      required:
+        - policyNumber
+        - claimantName
+        - claimType
+      properties:
+        policyNumber:
+          type: string
+          description: The policy number to validate (format POL-XXXXXX for active policies)
+          example: "POL-123456"
+        claimantName:
+          type: string
+          description: Full name of the claim applicant
+          example: "Alice Martin"
+        claimType:
+          type: string
+          description: Category of the insurance claim
+          example: "PROPERTY_DAMAGE"
+          enum:
+            - PROPERTY_DAMAGE
+            - MEDICAL
+            - VEHICLE
+            - LIABILITY
+            - LIFE
+
+    PolicyValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether the policy is valid and eligible for a claim
+        policyStatus:
+          type: string
+          description: Current status of the policy
+          enum:
+            - ACTIVE
+            - EXPIRED
+            - SUSPENDED
+        coverageAmount:
+          type: number
+          format: double
+          description: Maximum coverage amount in USD (0.0 if policy is not active)
+        message:
+          type: string
+          description: Human-readable validation result message
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+        error:
+          type: string
+          description: Short error category label
+        message:
+          type: string
+          description: Detailed error description
+        details:
+          type: array
+          items:
+            type: string
+          description: List of field-level validation error messages
+        timestamp:
+          type: string
+          format: date-time
+          description: Time at which the error occurred

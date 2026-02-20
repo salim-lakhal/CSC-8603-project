@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+
+# gRPC generated stubs
+*_pb2.py
+*_pb2_grpc.py
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.claude/

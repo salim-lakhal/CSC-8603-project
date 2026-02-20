@@ -1,0 +1,174 @@
+openapi: 3.1.0
+info:
+  title: Expert Assessment Service
+  description: |
+    Performs expert financial assessment on insurance claims.
+    An assessor reviews the claim and issues a recommendation with an approved amount.
+
+    Assessment rules:
+    - estimatedAmount > $100,000 → REVIEW (committee required), approvedAmount = 0
+    - estimatedAmount > $50,000  → APPROVE at 80% of estimated amount
+    - estimatedAmount <= $50,000 → APPROVE at 90% of estimated amount
+  version: 1.0.0
+  contact:
+    name: Insurance Claim Processing System
+
+servers:
+  - url: http://localhost:8086
+    description: Local development server
+
+tags:
+  - name: Expert Assessment
+    description: Operations for expert claim assessment
+
+paths:
+  /assessments:
+    post:
+      tags:
+        - Expert Assessment
+      summary: Create a new expert assessment
+      description: |
+        Submits a claim for expert assessment. The service assigns an assessor
+        and returns a recommendation (APPROVE/REVIEW) with the approved payout amount.
+        The assessmentId is a UUID generated per request.
+      operationId: createAssessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentRequest'
+            examples:
+              standardClaim:
+                summary: Standard claim (<=50k) - approved at 90%
+                value:
+                  claimId: "CLM-2024-001"
+                  claimType: "PROPERTY_DAMAGE"
+                  estimatedAmount: 35000.0
+                  description: "Roof damage caused by hailstorm on 2024-03-15."
+              mediumClaim:
+                summary: Medium claim (50k-100k) - approved at 80%
+                value:
+                  claimId: "CLM-2024-002"
+                  claimType: "VEHICLE"
+                  estimatedAmount: 72000.0
+                  description: "Total loss of commercial vehicle fleet after accident."
+              highValueClaim:
+                summary: High-value claim (>100k) - flagged for review
+                value:
+                  claimId: "CLM-2024-003"
+                  claimType: "LIABILITY"
+                  estimatedAmount: 150000.0
+                  description: "Third-party liability from industrial accident."
+      responses:
+        '201':
+          description: Assessment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentResponse'
+              examples:
+                approvedStandard:
+                  summary: Standard claim approved at 90%
+                  value:
+                    assessmentId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                    claimId: "CLM-2024-001"
+                    approvedAmount: 31500.0
+                    assessorName: "Dr. Marie Dupont"
+                    recommendation: "APPROVE"
+                    notes: "Standard claim approved at 90% rate: $31500.00."
+                flaggedForReview:
+                  summary: High-value claim sent for committee review
+                  value:
+                    assessmentId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                    claimId: "CLM-2024-003"
+                    approvedAmount: 0.0
+                    assessorName: "Jean-Pierre Martin"
+                    recommendation: "REVIEW"
+                    notes: "Claim amount exceeds high-value threshold. Requires committee review."
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    AssessmentRequest:
+      type: object
+      required:
+        - claimId
+        - claimType
+        - estimatedAmount
+        - description
+      properties:
+        claimId:
+          type: string
+          description: Unique identifier for the claim being assessed
+          example: "CLM-2024-001"
+        claimType:
+          type: string
+          description: Category of the insurance claim
+          example: "PROPERTY_DAMAGE"
+        estimatedAmount:
+          type: number
+          format: double
+          description: The claimant's estimated value of the claim in USD
+          minimum: 0.01
+          example: 35000.0
+        description:
+          type: string
+          description: Detailed description of the incident or loss
+          example: "Roof damage caused by hailstorm on 2024-03-15."
+
+    AssessmentResponse:
+      type: object
+      properties:
+        assessmentId:
+          type: string
+          format: uuid
+          description: Unique identifier for this assessment record
+        claimId:
+          type: string
+          description: The claim ID that was assessed
+        approvedAmount:
+          type: number
+          format: double
+          description: The final approved payout amount (0 if REVIEW status)
+        assessorName:
+          type: string
+          description: Full name of the assigned expert assessor
+        recommendation:
+          type: string
+          description: Assessment outcome
+          enum:
+            - APPROVE
+            - REJECT
+            - REVIEW
+        notes:
+          type: string
+          description: Assessor notes explaining the recommendation
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time

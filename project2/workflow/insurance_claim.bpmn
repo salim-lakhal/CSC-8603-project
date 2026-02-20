@@ -1,0 +1,858 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions
+    xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bonita="http://www.bonitasoft.org/ns/bpmn/2.0"
+    xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/20100524/MODEL/BPMN20.xsd"
+    id="definitions_insurance_claim"
+    targetNamespace="http://bonitasoft.com/insurance_claim"
+    name="Insurance Claim Processing"
+    exporter="Bonita Studio"
+    exporterVersion="7.13.0">
+
+  <!-- ============================================================
+       MESSAGE DEFINITIONS
+       ============================================================ -->
+
+  <bpmn2:message id="msg_claim_request" name="claim_request_message"/>
+  <bpmn2:message id="msg_claim_result"  name="claim_result_message"/>
+
+  <!-- ============================================================
+       ERROR DEFINITION
+       ============================================================ -->
+
+  <bpmn2:error id="error_claim_rejected" name="ClaimRejectedError" errorCode="CLAIM_REJECTED"/>
+
+  <!-- ============================================================
+       COLLABORATION
+       ============================================================ -->
+
+  <bpmn2:collaboration id="collaboration_insurance_claim" name="Insurance Claim Collaboration">
+
+    <bpmn2:participant id="participant_customer"   name="Customer Process"      processRef="process_customer"/>
+    <bpmn2:participant id="participant_insurance"  name="Insurance Processing"  processRef="process_insurance"/>
+
+    <!-- Message flow: Customer → Insurance (claim request) -->
+    <bpmn2:messageFlow
+        id="msgflow_claim_request"
+        name="claim_request_message"
+        sourceRef="throw_send_claim"
+        targetRef="catch_receive_claim"
+        messageRef="msg_claim_request"/>
+
+    <!-- Message flow: Insurance → Customer (claim result) -->
+    <bpmn2:messageFlow
+        id="msgflow_claim_result"
+        name="claim_result_message"
+        sourceRef="throw_send_result"
+        targetRef="catch_await_decision"
+        messageRef="msg_claim_result"/>
+
+  </bpmn2:collaboration>
+
+  <!-- ============================================================
+       POOL 1: CUSTOMER PROCESS
+       ============================================================ -->
+
+  <bpmn2:process id="process_customer" name="Customer Process" isExecutable="true">
+
+    <!-- Process-level data objects for customer pool -->
+    <bpmn2:dataObject id="do_customer_policyNumber"   name="policyNumber"/>
+    <bpmn2:dataObject id="do_customer_claimantName"   name="claimantName"/>
+    <bpmn2:dataObject id="do_customer_estimatedAmount" name="estimatedAmount"/>
+    <bpmn2:dataObject id="do_customer_claimType"      name="claimType"/>
+
+    <!-- Actor definition for customer pool -->
+    <bpmn2:laneSet id="laneset_customer">
+      <bpmn2:lane id="lane_customer" name="Customer">
+        <bpmn2:flowNodeRef>start_submit_claim_request</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_fill_claim_form</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>throw_send_claim</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>catch_await_decision</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>end_claim_processed</bpmn2:flowNodeRef>
+      </bpmn2:lane>
+    </bpmn2:laneSet>
+
+    <!-- Start Event: Submit Claim Request -->
+    <bpmn2:startEvent id="start_submit_claim_request" name="Submit Claim Request">
+      <bpmn2:outgoing>sf_start_to_fill_form</bpmn2:outgoing>
+    </bpmn2:startEvent>
+
+    <!-- User Task: Fill Claim Form -->
+    <bpmn2:userTask id="task_fill_claim_form" name="Fill Claim Form">
+      <bpmn2:documentation>
+        Customer fills in the insurance claim form with:
+        - policyNumber (Text)
+        - claimantName (Text)
+        - estimatedAmount (Double)
+        - claimType (Text: AUTO, HOME, HEALTH, etc.)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:actor name="customer"/>
+        <bonita:formMapping>
+          <bonita:form>insurance-claim-form</bonita:form>
+        </bonita:formMapping>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_start_to_fill_form</bpmn2:incoming>
+      <bpmn2:outgoing>sf_fill_form_to_send_claim</bpmn2:outgoing>
+    </bpmn2:userTask>
+
+    <!-- Intermediate Throw Message Event: Send Claim -->
+    <bpmn2:intermediateThrowEvent id="throw_send_claim" name="Send Claim">
+      <bpmn2:documentation>
+        Sends claim_request_message to the Insurance Processing pool
+        carrying: policyNumber, claimantName, estimatedAmount, claimType
+      </bpmn2:documentation>
+      <bpmn2:incoming>sf_fill_form_to_send_claim</bpmn2:incoming>
+      <bpmn2:outgoing>sf_send_claim_to_await</bpmn2:outgoing>
+      <bpmn2:messageEventDefinition id="msgdef_throw_claim_request" messageRef="msg_claim_request"/>
+    </bpmn2:intermediateThrowEvent>
+
+    <!-- Intermediate Catch Message Event: Await Decision -->
+    <bpmn2:intermediateCatchEvent id="catch_await_decision" name="Await Decision">
+      <bpmn2:documentation>
+        Waits for claim_result_message from the Insurance Processing pool.
+        Receives: claimId, approvedAmount, authorizationCode, status
+      </bpmn2:documentation>
+      <bpmn2:incoming>sf_send_claim_to_await</bpmn2:incoming>
+      <bpmn2:outgoing>sf_await_to_end</bpmn2:outgoing>
+      <bpmn2:messageEventDefinition id="msgdef_catch_claim_result" messageRef="msg_claim_result"/>
+    </bpmn2:intermediateCatchEvent>
+
+    <!-- End Event: Claim Processed -->
+    <bpmn2:endEvent id="end_claim_processed" name="Claim Processed">
+      <bpmn2:incoming>sf_await_to_end</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <!-- Sequence Flows — Customer Pool -->
+    <bpmn2:sequenceFlow id="sf_start_to_fill_form"       sourceRef="start_submit_claim_request" targetRef="task_fill_claim_form"/>
+    <bpmn2:sequenceFlow id="sf_fill_form_to_send_claim"  sourceRef="task_fill_claim_form"        targetRef="throw_send_claim"/>
+    <bpmn2:sequenceFlow id="sf_send_claim_to_await"      sourceRef="throw_send_claim"            targetRef="catch_await_decision"/>
+    <bpmn2:sequenceFlow id="sf_await_to_end"             sourceRef="catch_await_decision"        targetRef="end_claim_processed"/>
+
+  </bpmn2:process>
+
+  <!-- ============================================================
+       POOL 2: INSURANCE PROCESSING
+       ============================================================ -->
+
+  <bpmn2:process id="process_insurance" name="Insurance Processing" isExecutable="true">
+
+    <!-- Process variables (pool-level data objects) -->
+    <bpmn2:dataObject id="do_claimId"            name="claimId"/>
+    <bpmn2:dataObject id="do_policyNumber"       name="policyNumber"/>
+    <bpmn2:dataObject id="do_claimantName"       name="claimantName"/>
+    <bpmn2:dataObject id="do_estimatedAmount"    name="estimatedAmount"/>
+    <bpmn2:dataObject id="do_claimType"          name="claimType"/>
+    <bpmn2:dataObject id="do_verificationStatus" name="verificationStatus"/>
+    <bpmn2:dataObject id="do_fraudRiskLevel"     name="fraudRiskLevel"/>
+    <bpmn2:dataObject id="do_isEligible"         name="isEligible"/>
+    <bpmn2:dataObject id="do_documentStatus"     name="documentStatus"/>
+    <bpmn2:dataObject id="do_approvedAmount"     name="approvedAmount"/>
+    <bpmn2:dataObject id="do_authorizationCode"  name="authorizationCode"/>
+    <bpmn2:dataObject id="do_notificationStatus" name="notificationStatus"/>
+
+    <!-- Lane set with sublanes -->
+    <bpmn2:laneSet id="laneset_insurance">
+
+      <bpmn2:lane id="lane_reception" name="Claim Reception">
+        <bpmn2:flowNodeRef>catch_receive_claim</bpmn2:flowNodeRef>
+      </bpmn2:lane>
+
+      <bpmn2:lane id="lane_verification" name="Verification">
+        <bpmn2:flowNodeRef>task_verify_identity</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>gw_identity_valid</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_validate_policy</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_detect_fraud</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_check_eligibility</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>gw_eligible</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>end_rejected_identity</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>end_rejected_eligibility</bpmn2:flowNodeRef>
+      </bpmn2:lane>
+
+      <bpmn2:lane id="lane_processing" name="Claim Processing">
+        <bpmn2:flowNodeRef>task_review_documents</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_expert_assessment</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_calculate_compensation</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_authorize_payment</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>task_send_notification</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>throw_send_result</bpmn2:flowNodeRef>
+        <bpmn2:flowNodeRef>end_claim_completed</bpmn2:flowNodeRef>
+      </bpmn2:lane>
+
+    </bpmn2:laneSet>
+
+    <!-- ─────────────────────────────────────────────────────────
+         START MESSAGE EVENT: Receive Claim
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:startEvent id="catch_receive_claim" name="Receive Claim">
+      <bpmn2:documentation>
+        Catches claim_request_message from the Customer Process pool.
+        Initializes: policyNumber, claimantName, estimatedAmount, claimType
+      </bpmn2:documentation>
+      <bpmn2:outgoing>sf_receive_to_verify_identity</bpmn2:outgoing>
+      <bpmn2:messageEventDefinition id="msgdef_start_catch_request" messageRef="msg_claim_request"/>
+    </bpmn2:startEvent>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Verify Identity  (SOAP connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_verify_identity" name="Verify Identity">
+      <bpmn2:documentation>
+        Calls the SOAP/WSDL identity verification web service.
+        Connector: Webservice SOAP 1.2
+        WSDL: http://localhost:8082/ws/identity.wsdl
+        Operation: verifyIdentity
+        Output: verificationStatus (Text) — "VERIFIED" or "FAILED"
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_identity_verification"
+                          name="identity-verification"
+                          connectorId="webservice-1.2"
+                          version="1.0">
+          <bonita:input name="wsdlUrl"    value="http://localhost:8082/ws/identity.wsdl"/>
+          <bonita:input name="operation"  value="verifyIdentity"/>
+          <bonita:input name="policyNumber"  expression="${policyNumber}"/>
+          <bonita:input name="claimantName"  expression="${claimantName}"/>
+          <bonita:output name="verificationStatus">
+            <bonita:script language="groovy">
+import org.w3c.dom.*;
+responseDocumentBody.normalizeDocument();
+NodeList resultList = responseDocumentBody.getElementsByTagNameNS("*", "verificationStatus");
+Element el = (Element) resultList.item(0);
+return el.getTextContent();
+            </bonita:script>
+          </bonita:output>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_receive_to_verify_identity</bpmn2:incoming>
+      <bpmn2:outgoing>sf_verify_identity_to_gw</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         XOR GATEWAY: Identity Valid?
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:exclusiveGateway id="gw_identity_valid" name="Identity Valid?" default="sf_gw_identity_to_rejected">
+      <bpmn2:incoming>sf_verify_identity_to_gw</bpmn2:incoming>
+      <bpmn2:outgoing>sf_gw_identity_to_validate_policy</bpmn2:outgoing>
+      <bpmn2:outgoing>sf_gw_identity_to_rejected</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Validate Policy  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_validate_policy" name="Validate Policy">
+      <bpmn2:documentation>
+        Calls the REST policy validation service.
+        POST http://localhost:8083/policies/validate
+        Output: isEligible (via policyValid), coverageAmount
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_policy_validation"
+                          name="policy-validation"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8083/policies/validate"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;policyNumber&quot;: &quot;' + policyNumber + '&quot;, &quot;claimantName&quot;: &quot;' + claimantName + '&quot;}'}"/>
+          <bonita:output name="isEligible"  expression="bodyAsObject.valid"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_gw_identity_to_validate_policy</bpmn2:incoming>
+      <bpmn2:outgoing>sf_validate_policy_to_detect_fraud</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Detect Fraud  (gRPC via REST proxy)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_detect_fraud" name="Detect Fraud">
+      <bpmn2:documentation>
+        Calls the gRPC fraud detection service via a REST proxy adapter.
+        The fraud-detection-service exposes a gRPC endpoint on port 8085
+        and a REST/HTTP proxy on port 8085/fraud.
+        POST http://localhost:8085/fraud/detect
+        Output: fraudRiskLevel (Text) — "LOW", "MEDIUM", "HIGH"
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_fraud_detection"
+                          name="fraud-detection"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8085/fraud/detect"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;policyNumber&quot;: &quot;' + policyNumber + '&quot;, &quot;estimatedAmount&quot;: ' + estimatedAmount + ', &quot;claimType&quot;: &quot;' + claimType + '&quot;}'}"/>
+          <bonita:output name="fraudRiskLevel" expression="bodyAsObject.riskLevel"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_validate_policy_to_detect_fraud</bpmn2:incoming>
+      <bpmn2:outgoing>sf_detect_fraud_to_check_eligibility</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Check Eligibility  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_check_eligibility" name="Check Eligibility">
+      <bpmn2:documentation>
+        Calls the REST eligibility check service.
+        POST http://localhost:8084/eligibility/check
+        Output: isEligible (Boolean)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_eligibility"
+                          name="eligibility"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8084/eligibility/check"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;policyNumber&quot;: &quot;' + policyNumber + '&quot;, &quot;claimType&quot;: &quot;' + claimType + '&quot;}'}"/>
+          <bonita:output name="isEligible" expression="bodyAsObject.eligible"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_detect_fraud_to_check_eligibility</bpmn2:incoming>
+      <bpmn2:outgoing>sf_check_eligibility_to_gw</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         XOR GATEWAY: Eligible?
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:exclusiveGateway id="gw_eligible" name="Eligible?" default="sf_gw_eligible_to_rejected">
+      <bpmn2:incoming>sf_check_eligibility_to_gw</bpmn2:incoming>
+      <bpmn2:outgoing>sf_gw_eligible_to_review_docs</bpmn2:outgoing>
+      <bpmn2:outgoing>sf_gw_eligible_to_rejected</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Review Documents  (GraphQL service task)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_review_documents" name="Review Documents">
+      <bpmn2:documentation>
+        Calls the GraphQL document review service.
+        Endpoint: http://localhost:8090/graphql
+        GraphQL query:
+          query ReviewDocuments($claimId: ID!) {
+            reviewDocuments(claimId: $claimId) {
+              documentStatus
+              missingDocuments
+              reviewNote
+            }
+          }
+        Implemented via REST connector sending a GraphQL JSON body.
+        Output: documentStatus (Text)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_document_review"
+                          name="document-review-graphql"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8090/graphql"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;query&quot;: &quot;query ReviewDocuments($claimId: ID!) { reviewDocuments(claimId: $claimId) { documentStatus missingDocuments reviewNote } }&quot;, &quot;variables&quot;: {&quot;claimId&quot;: &quot;' + claimId + '&quot;}}'}"/>
+          <bonita:output name="documentStatus" expression="bodyAsObject.data.reviewDocuments.documentStatus"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_gw_eligible_to_review_docs</bpmn2:incoming>
+      <bpmn2:outgoing>sf_review_docs_to_expert</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Expert Assessment  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_expert_assessment" name="Expert Assessment">
+      <bpmn2:documentation>
+        Calls the expert assessment REST service.
+        POST http://localhost:8086/assessments
+        Output: approvedAmount (Double)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_expert_assessment"
+                          name="expert-assessment"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8086/assessments"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;estimatedAmount&quot;: ' + estimatedAmount + ', &quot;claimType&quot;: &quot;' + claimType + '&quot;, &quot;fraudRiskLevel&quot;: &quot;' + fraudRiskLevel + '&quot;}'}"/>
+          <bonita:output name="approvedAmount" expression="bodyAsObject.approvedAmount"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_review_docs_to_expert</bpmn2:incoming>
+      <bpmn2:outgoing>sf_expert_to_calculate</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Calculate Compensation  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_calculate_compensation" name="Calculate Compensation">
+      <bpmn2:documentation>
+        Calls the compensation calculation REST service.
+        POST http://localhost:8087/compensation/calculate
+        Output: totalPayment (stored locally)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_compensation"
+                          name="compensation"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8087/compensation/calculate"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;approvedAmount&quot;: ' + approvedAmount + ', &quot;claimType&quot;: &quot;' + claimType + '&quot;}'}"/>
+          <bonita:output name="approvedAmount" expression="bodyAsObject.totalPayment"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_expert_to_calculate</bpmn2:incoming>
+      <bpmn2:outgoing>sf_calculate_to_authorize</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Authorize Payment  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_authorize_payment" name="Authorize Payment">
+      <bpmn2:documentation>
+        Calls the payment authorization REST service.
+        POST http://localhost:8088/payments/authorize
+        Output: authorizationCode (Text)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_payment_authorization"
+                          name="payment-authorization"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8088/payments/authorize"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;approvedAmount&quot;: ' + approvedAmount + ', &quot;policyNumber&quot;: &quot;' + policyNumber + '&quot;}'}"/>
+          <bonita:output name="authorizationCode" expression="bodyAsObject.authorizationCode"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_calculate_to_authorize</bpmn2:incoming>
+      <bpmn2:outgoing>sf_authorize_to_notify</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SERVICE TASK: Send Notification  (REST connector)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:serviceTask id="task_send_notification" name="Send Notification">
+      <bpmn2:documentation>
+        Calls the notification dispatch REST service.
+        POST http://localhost:8089/notifications/send
+        Output: notificationStatus (Text)
+      </bpmn2:documentation>
+      <bpmn2:extensionElements>
+        <bonita:connector id="connector_notification"
+                          name="notification"
+                          connectorId="rest-get-1.0"
+                          version="1.0">
+          <bonita:input name="url"    value="http://localhost:8089/notifications/send"/>
+          <bonita:input name="method" value="POST"/>
+          <bonita:input name="contentType" value="application/json"/>
+          <bonita:input name="body"   expression="${'{&quot;claimId&quot;: &quot;' + claimId + '&quot;, &quot;claimantName&quot;: &quot;' + claimantName + '&quot;, &quot;approvedAmount&quot;: ' + approvedAmount + ', &quot;authorizationCode&quot;: &quot;' + authorizationCode + '&quot;}'}"/>
+          <bonita:output name="notificationStatus" expression="bodyAsObject.status"/>
+        </bonita:connector>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>sf_authorize_to_notify</bpmn2:incoming>
+      <bpmn2:outgoing>sf_notify_to_send_result</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ─────────────────────────────────────────────────────────
+         INTERMEDIATE THROW MESSAGE EVENT: Send Result
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:intermediateThrowEvent id="throw_send_result" name="Send Result">
+      <bpmn2:documentation>
+        Sends claim_result_message back to the Customer Process pool.
+        Payload: claimId, approvedAmount, authorizationCode, notificationStatus
+      </bpmn2:documentation>
+      <bpmn2:incoming>sf_notify_to_send_result</bpmn2:incoming>
+      <bpmn2:outgoing>sf_send_result_to_end</bpmn2:outgoing>
+      <bpmn2:messageEventDefinition id="msgdef_throw_claim_result" messageRef="msg_claim_result"/>
+    </bpmn2:intermediateThrowEvent>
+
+    <!-- ─────────────────────────────────────────────────────────
+         END EVENT: Claim Completed
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:endEvent id="end_claim_completed" name="Claim Completed">
+      <bpmn2:incoming>sf_send_result_to_end</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <!-- ─────────────────────────────────────────────────────────
+         ERROR END EVENT: Claim Rejected (identity failure)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:endEvent id="end_rejected_identity" name="Claim Rejected">
+      <bpmn2:documentation>
+        Reached when identity verification fails (verificationStatus != "VERIFIED").
+      </bpmn2:documentation>
+      <bpmn2:incoming>sf_gw_identity_to_rejected</bpmn2:incoming>
+      <bpmn2:errorEventDefinition id="errdef_rejected_identity" errorRef="error_claim_rejected"/>
+    </bpmn2:endEvent>
+
+    <!-- ─────────────────────────────────────────────────────────
+         ERROR END EVENT: Claim Rejected (eligibility failure)
+         ───────────────────────────────────────────────────────── -->
+    <bpmn2:endEvent id="end_rejected_eligibility" name="Claim Rejected">
+      <bpmn2:documentation>
+        Reached when eligibility check fails (isEligible == false).
+      </bpmn2:documentation>
+      <bpmn2:incoming>sf_gw_eligible_to_rejected</bpmn2:incoming>
+      <bpmn2:errorEventDefinition id="errdef_rejected_eligibility" errorRef="error_claim_rejected"/>
+    </bpmn2:endEvent>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SEQUENCE FLOWS — Insurance Processing Pool
+         ───────────────────────────────────────────────────────── -->
+
+    <!-- Main happy path -->
+    <bpmn2:sequenceFlow id="sf_receive_to_verify_identity"        sourceRef="catch_receive_claim"        targetRef="task_verify_identity"/>
+    <bpmn2:sequenceFlow id="sf_verify_identity_to_gw"             sourceRef="task_verify_identity"       targetRef="gw_identity_valid"/>
+
+    <!-- XOR 1: Identity Valid? — YES branch (condition) -->
+    <bpmn2:sequenceFlow id="sf_gw_identity_to_validate_policy"    sourceRef="gw_identity_valid"          targetRef="task_validate_policy">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="groovy">
+        verificationStatus == "VERIFIED"
+      </bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- XOR 1: Identity Valid? — NO branch (default) -->
+    <bpmn2:sequenceFlow id="sf_gw_identity_to_rejected"           sourceRef="gw_identity_valid"          targetRef="end_rejected_identity"/>
+
+    <bpmn2:sequenceFlow id="sf_validate_policy_to_detect_fraud"   sourceRef="task_validate_policy"       targetRef="task_detect_fraud"/>
+    <bpmn2:sequenceFlow id="sf_detect_fraud_to_check_eligibility" sourceRef="task_detect_fraud"          targetRef="task_check_eligibility"/>
+    <bpmn2:sequenceFlow id="sf_check_eligibility_to_gw"           sourceRef="task_check_eligibility"     targetRef="gw_eligible"/>
+
+    <!-- XOR 2: Eligible? — YES branch (condition) -->
+    <bpmn2:sequenceFlow id="sf_gw_eligible_to_review_docs"        sourceRef="gw_eligible"                targetRef="task_review_documents">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="groovy">
+        isEligible == true
+      </bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- XOR 2: Eligible? — NO branch (default) -->
+    <bpmn2:sequenceFlow id="sf_gw_eligible_to_rejected"           sourceRef="gw_eligible"                targetRef="end_rejected_eligibility"/>
+
+    <bpmn2:sequenceFlow id="sf_review_docs_to_expert"             sourceRef="task_review_documents"      targetRef="task_expert_assessment"/>
+    <bpmn2:sequenceFlow id="sf_expert_to_calculate"               sourceRef="task_expert_assessment"     targetRef="task_calculate_compensation"/>
+    <bpmn2:sequenceFlow id="sf_calculate_to_authorize"            sourceRef="task_calculate_compensation" targetRef="task_authorize_payment"/>
+    <bpmn2:sequenceFlow id="sf_authorize_to_notify"               sourceRef="task_authorize_payment"     targetRef="task_send_notification"/>
+    <bpmn2:sequenceFlow id="sf_notify_to_send_result"             sourceRef="task_send_notification"     targetRef="throw_send_result"/>
+    <bpmn2:sequenceFlow id="sf_send_result_to_end"                sourceRef="throw_send_result"          targetRef="end_claim_completed"/>
+
+  </bpmn2:process>
+
+  <!-- ============================================================
+       BPMN DIAGRAM INTERCHANGE (DI)
+       Provides layout coordinates for Bonita Studio canvas rendering.
+       All sizes in pixels. Origin is top-left of canvas.
+       ============================================================ -->
+
+  <bpmndi:BPMNDiagram id="bpmndi_insurance_claim" name="Insurance Claim Diagram">
+    <bpmndi:BPMNPlane id="bpmnplane_insurance_claim" bpmnElement="collaboration_insurance_claim">
+
+      <!-- ── CUSTOMER POOL ─────────────────────────────────────── -->
+
+      <bpmndi:BPMNShape id="shape_participant_customer" bpmnElement="participant_customer" isHorizontal="true">
+        <dc:Bounds x="30" y="30" width="1420" height="180"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="shape_lane_customer" bpmnElement="lane_customer" isHorizontal="true">
+        <dc:Bounds x="60" y="30" width="1390" height="180"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Start Event: Submit Claim Request -->
+      <bpmndi:BPMNShape id="shape_start_submit_claim_request" bpmnElement="start_submit_claim_request">
+        <dc:Bounds x="112" y="102" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="90" y="143" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- User Task: Fill Claim Form -->
+      <bpmndi:BPMNShape id="shape_task_fill_claim_form" bpmnElement="task_fill_claim_form">
+        <dc:Bounds x="200" y="85" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Intermediate Throw Message: Send Claim -->
+      <bpmndi:BPMNShape id="shape_throw_send_claim" bpmnElement="throw_send_claim">
+        <dc:Bounds x="382" y="102" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="368" y="143" width="64" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Intermediate Catch Message: Await Decision -->
+      <bpmndi:BPMNShape id="shape_catch_await_decision" bpmnElement="catch_await_decision">
+        <dc:Bounds x="1242" y="102" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1223" y="143" width="74" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Claim Processed -->
+      <bpmndi:BPMNShape id="shape_end_claim_processed" bpmnElement="end_claim_processed">
+        <dc:Bounds x="1352" y="102" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1330" y="143" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Sequence flows — Customer pool -->
+      <bpmndi:BPMNEdge id="edge_sf_start_to_fill_form" bpmnElement="sf_start_to_fill_form">
+        <di:waypoint x="148" y="120"/>
+        <di:waypoint x="200" y="120"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_fill_form_to_send_claim" bpmnElement="sf_fill_form_to_send_claim">
+        <di:waypoint x="320" y="120"/>
+        <di:waypoint x="382" y="120"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_send_claim_to_await" bpmnElement="sf_send_claim_to_await">
+        <di:waypoint x="418" y="120"/>
+        <di:waypoint x="1242" y="120"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_await_to_end" bpmnElement="sf_await_to_end">
+        <di:waypoint x="1278" y="120"/>
+        <di:waypoint x="1352" y="120"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── INSURANCE PROCESSING POOL ─────────────────────────── -->
+
+      <bpmndi:BPMNShape id="shape_participant_insurance" bpmnElement="participant_insurance" isHorizontal="true">
+        <dc:Bounds x="30" y="260" width="1420" height="620"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Lane: Claim Reception -->
+      <bpmndi:BPMNShape id="shape_lane_reception" bpmnElement="lane_reception" isHorizontal="true">
+        <dc:Bounds x="60" y="260" width="1390" height="120"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Lane: Verification -->
+      <bpmndi:BPMNShape id="shape_lane_verification" bpmnElement="lane_verification" isHorizontal="true">
+        <dc:Bounds x="60" y="380" width="1390" height="240"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Lane: Claim Processing -->
+      <bpmndi:BPMNShape id="shape_lane_processing" bpmnElement="lane_processing" isHorizontal="true">
+        <dc:Bounds x="60" y="620" width="1390" height="260"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Start Message Event: Receive Claim -->
+      <bpmndi:BPMNShape id="shape_catch_receive_claim" bpmnElement="catch_receive_claim">
+        <dc:Bounds x="112" y="302" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="96" y="343" width="68" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Verify Identity -->
+      <bpmndi:BPMNShape id="shape_task_verify_identity" bpmnElement="task_verify_identity">
+        <dc:Bounds x="90" y="420" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- XOR Gateway: Identity Valid? -->
+      <bpmndi:BPMNShape id="shape_gw_identity_valid" bpmnElement="gw_identity_valid" isMarkerVisible="true">
+        <dc:Bounds x="265" y="437" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="249" y="492" width="82" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Validate Policy -->
+      <bpmndi:BPMNShape id="shape_task_validate_policy" bpmnElement="task_validate_policy">
+        <dc:Bounds x="370" y="420" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Detect Fraud -->
+      <bpmndi:BPMNShape id="shape_task_detect_fraud" bpmnElement="task_detect_fraud">
+        <dc:Bounds x="550" y="420" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Check Eligibility -->
+      <bpmndi:BPMNShape id="shape_task_check_eligibility" bpmnElement="task_check_eligibility">
+        <dc:Bounds x="730" y="420" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- XOR Gateway: Eligible? -->
+      <bpmndi:BPMNShape id="shape_gw_eligible" bpmnElement="gw_eligible" isMarkerVisible="true">
+        <dc:Bounds x="905" y="437" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="897" y="492" width="66" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Error End Event: Claim Rejected (identity) -->
+      <bpmndi:BPMNShape id="shape_end_rejected_identity" bpmnElement="end_rejected_identity">
+        <dc:Bounds x="272" y="547" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="250" y="588" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Error End Event: Claim Rejected (eligibility) -->
+      <bpmndi:BPMNShape id="shape_end_rejected_eligibility" bpmnElement="end_rejected_eligibility">
+        <dc:Bounds x="912" y="547" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="890" y="588" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Review Documents -->
+      <bpmndi:BPMNShape id="shape_task_review_documents" bpmnElement="task_review_documents">
+        <dc:Bounds x="90" y="660" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Expert Assessment -->
+      <bpmndi:BPMNShape id="shape_task_expert_assessment" bpmnElement="task_expert_assessment">
+        <dc:Bounds x="270" y="660" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Calculate Compensation -->
+      <bpmndi:BPMNShape id="shape_task_calculate_compensation" bpmnElement="task_calculate_compensation">
+        <dc:Bounds x="450" y="660" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Authorize Payment -->
+      <bpmndi:BPMNShape id="shape_task_authorize_payment" bpmnElement="task_authorize_payment">
+        <dc:Bounds x="630" y="660" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Service Task: Send Notification -->
+      <bpmndi:BPMNShape id="shape_task_send_notification" bpmnElement="task_send_notification">
+        <dc:Bounds x="810" y="660" width="120" height="70"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Intermediate Throw Message: Send Result -->
+      <bpmndi:BPMNShape id="shape_throw_send_result" bpmnElement="throw_send_result">
+        <dc:Bounds x="992" y="677" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="978" y="718" width="64" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Claim Completed -->
+      <bpmndi:BPMNShape id="shape_end_claim_completed" bpmnElement="end_claim_completed">
+        <dc:Bounds x="1092" y="677" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1070" y="718" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Sequence flows — Insurance Processing pool -->
+
+      <bpmndi:BPMNEdge id="edge_sf_receive_to_verify_identity" bpmnElement="sf_receive_to_verify_identity">
+        <di:waypoint x="130" y="338"/>
+        <di:waypoint x="130" y="420"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_verify_identity_to_gw" bpmnElement="sf_verify_identity_to_gw">
+        <di:waypoint x="210" y="455"/>
+        <di:waypoint x="265" y="462"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_gw_identity_to_validate_policy" bpmnElement="sf_gw_identity_to_validate_policy">
+        <di:waypoint x="315" y="462"/>
+        <di:waypoint x="370" y="455"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="320" y="440" width="46" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_gw_identity_to_rejected" bpmnElement="sf_gw_identity_to_rejected">
+        <di:waypoint x="290" y="487"/>
+        <di:waypoint x="290" y="547"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="296" y="510" width="46" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_validate_policy_to_detect_fraud" bpmnElement="sf_validate_policy_to_detect_fraud">
+        <di:waypoint x="490" y="455"/>
+        <di:waypoint x="550" y="455"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_detect_fraud_to_check_eligibility" bpmnElement="sf_detect_fraud_to_check_eligibility">
+        <di:waypoint x="670" y="455"/>
+        <di:waypoint x="730" y="455"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_check_eligibility_to_gw" bpmnElement="sf_check_eligibility_to_gw">
+        <di:waypoint x="850" y="455"/>
+        <di:waypoint x="905" y="462"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_gw_eligible_to_review_docs" bpmnElement="sf_gw_eligible_to_review_docs">
+        <di:waypoint x="930" y="487"/>
+        <di:waypoint x="930" y="660"/>
+        <di:waypoint x="150" y="660"/>
+        <di:waypoint x="150" y="660"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="933" y="570" width="44" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_gw_eligible_to_rejected" bpmnElement="sf_gw_eligible_to_rejected">
+        <di:waypoint x="930" y="487"/>
+        <di:waypoint x="930" y="547"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="936" y="510" width="46" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_review_docs_to_expert" bpmnElement="sf_review_docs_to_expert">
+        <di:waypoint x="210" y="695"/>
+        <di:waypoint x="270" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_expert_to_calculate" bpmnElement="sf_expert_to_calculate">
+        <di:waypoint x="390" y="695"/>
+        <di:waypoint x="450" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_calculate_to_authorize" bpmnElement="sf_calculate_to_authorize">
+        <di:waypoint x="570" y="695"/>
+        <di:waypoint x="630" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_authorize_to_notify" bpmnElement="sf_authorize_to_notify">
+        <di:waypoint x="750" y="695"/>
+        <di:waypoint x="810" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_notify_to_send_result" bpmnElement="sf_notify_to_send_result">
+        <di:waypoint x="930" y="695"/>
+        <di:waypoint x="992" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="edge_sf_send_result_to_end" bpmnElement="sf_send_result_to_end">
+        <di:waypoint x="1028" y="695"/>
+        <di:waypoint x="1092" y="695"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── MESSAGE FLOWS (cross-pool dashed arrows) ─────────── -->
+
+      <!-- claim_request_message: Customer throw → Insurance start -->
+      <bpmndi:BPMNEdge id="edge_msgflow_claim_request" bpmnElement="msgflow_claim_request">
+        <di:waypoint x="400" y="138"/>
+        <di:waypoint x="400" y="200"/>
+        <di:waypoint x="130" y="200"/>
+        <di:waypoint x="130" y="302"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- claim_result_message: Insurance throw → Customer catch -->
+      <bpmndi:BPMNEdge id="edge_msgflow_claim_result" bpmnElement="msgflow_claim_result">
+        <di:waypoint x="1010" y="677"/>
+        <di:waypoint x="1010" y="200"/>
+        <di:waypoint x="1260" y="200"/>
+        <di:waypoint x="1260" y="138"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn2:definitions>

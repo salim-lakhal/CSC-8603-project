@@ -1,0 +1,168 @@
+openapi: 3.1.0
+info:
+  title: Notification Service
+  description: |
+    Dispatches email notifications to insurance claim recipients.
+
+    Delivery rules:
+    - recipientEmail contains "@" → status SENT
+    - recipientEmail does not contain "@" → status FAILED
+
+    Supported notification types: SUBMITTED, APPROVED, REJECTED, PAYMENT_SENT.
+    All notifications are delivered via the EMAIL channel.
+  version: 1.0.0
+  contact:
+    name: Insurance Claim Processing System
+
+servers:
+  - url: http://localhost:8089
+    description: Local development server
+
+tags:
+  - name: Notifications
+    description: Operations for sending claim notifications
+
+paths:
+  /notifications/send:
+    post:
+      tags:
+        - Notifications
+      summary: Send a claim notification
+      description: |
+        Dispatches an email notification to the claim recipient.
+        The delivery status (SENT/FAILED) depends on whether a valid
+        email address (containing "@") is supplied.
+      operationId: sendNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRequest'
+            examples:
+              approvedNotification:
+                summary: Send APPROVED notification
+                value:
+                  claimId: "CLM-2024-001"
+                  recipientEmail: "alice.martin@example.com"
+                  notificationType: "APPROVED"
+                  message: "Your claim CLM-2024-001 has been approved. Payment will be processed within 5 business days."
+              paymentSentNotification:
+                summary: Send PAYMENT_SENT notification
+                value:
+                  claimId: "CLM-2024-001"
+                  recipientEmail: "alice.martin@example.com"
+                  notificationType: "PAYMENT_SENT"
+                  message: "Your payment of $30,380.00 has been transferred to your bank account."
+              failedDelivery:
+                summary: Notification with invalid email (will FAIL)
+                value:
+                  claimId: "CLM-2024-001"
+                  recipientEmail: "not-an-email"
+                  notificationType: "APPROVED"
+                  message: "Your claim has been approved."
+      responses:
+        '200':
+          description: Notification processing result (SENT or FAILED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+              examples:
+                sent:
+                  summary: Notification sent successfully
+                  value:
+                    notificationId: "e5f6a7b8-c9d0-1234-ef01-345678901234"
+                    status: "SENT"
+                    channel: "EMAIL"
+                    timestamp: "2024-03-15T14:32:00"
+                failed:
+                  summary: Notification delivery failed
+                  value:
+                    notificationId: "f6a7b8c9-d0e1-2345-f012-456789012345"
+                    status: "FAILED"
+                    channel: "EMAIL"
+                    timestamp: "2024-03-15T14:32:01"
+        '400':
+          description: Invalid request - missing fields or unsupported notification type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    NotificationRequest:
+      type: object
+      required:
+        - claimId
+        - recipientEmail
+        - notificationType
+        - message
+      properties:
+        claimId:
+          type: string
+          description: The claim associated with this notification
+          example: "CLM-2024-001"
+        recipientEmail:
+          type: string
+          description: Email address of the notification recipient
+          example: "alice.martin@example.com"
+        notificationType:
+          type: string
+          description: Type of notification event
+          enum:
+            - SUBMITTED
+            - APPROVED
+            - REJECTED
+            - PAYMENT_SENT
+          example: "APPROVED"
+        message:
+          type: string
+          description: Notification body text to send to the recipient
+          example: "Your claim CLM-2024-001 has been approved."
+
+    NotificationResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: Unique identifier for this notification dispatch record
+        status:
+          type: string
+          description: Delivery outcome
+          enum:
+            - SENT
+            - FAILED
+        channel:
+          type: string
+          description: Communication channel used for delivery
+          example: "EMAIL"
+        timestamp:
+          type: string
+          description: ISO 8601 datetime when the notification was processed
+          example: "2024-03-15T14:32:00"
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time

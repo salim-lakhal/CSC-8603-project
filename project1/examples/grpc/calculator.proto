@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package calculator;
+
+// =============================================================================
+// Calculator Service — gRPC Example for CS Assignment
+// =============================================================================
+//
+// This .proto file is the "contract" (IDL — Interface Definition Language) that
+// defines the service, its RPC methods, and the message types used for
+// communication between client and server.
+//
+// gRPC uses Protocol Buffers (protobuf) as its IDL and wire format by default.
+// The compiler (protoc) generates client and server stubs in the target language
+// from this single source of truth, ensuring both sides always agree on the
+// interface — a key advantage over REST, where the schema is optional.
+//
+// Three gRPC communication patterns are demonstrated here:
+//
+//   1. Unary RPC            — one request, one response   (like a normal function call)
+//   2. Server-side streaming — one request, N responses   (like a subscription feed)
+//   3. Bidirectional streaming — N requests, N responses  (full-duplex channel)
+//
+// There is also a fourth pattern (client-side streaming) which is not shown here
+// but follows the same syntax: rpc Foo (stream Req) returns (Res);
+// =============================================================================
+
+// CalculatorService exposes arithmetic operations over a gRPC channel.
+// Each RPC method maps to a distinct communication pattern so that the
+// assignment can illustrate all three major streaming variants.
+service CalculatorService {
+
+  // ------------------------------------------------------------------
+  // Pattern 1: Unary RPC
+  // ------------------------------------------------------------------
+  // The simplest and most common pattern.  The client sends exactly one
+  // CalculateRequest, the server performs the operation, and returns
+  // exactly one CalculateResponse.  This is semantically equivalent to
+  // a single HTTP POST in REST or a single Query/Mutation in GraphQL,
+  // but it benefits from HTTP/2 multiplexing and binary encoding.
+  rpc Calculate (CalculateRequest) returns (CalculateResponse);
+
+  // ------------------------------------------------------------------
+  // Pattern 2: Server-side Streaming RPC
+  // ------------------------------------------------------------------
+  // The client sends a single request; the server replies with a stream
+  // of zero or more responses before closing its half of the connection.
+  // Useful for progress updates, large result sets, or live feeds.
+  // Here we use it to stream intermediate computation steps.
+  // The "stream" keyword before the return type signals streaming.
+  rpc CalculateStream (CalculateRequest) returns (stream CalculateResponse);
+
+  // ------------------------------------------------------------------
+  // Pattern 3: Bidirectional Streaming RPC
+  // ------------------------------------------------------------------
+  // Both sides send a stream of messages independently.  The server can
+  // reply to each request as it arrives, batch replies, or do anything
+  // in between — the two streams are fully independent.
+  // Here we use it to process a batch of calculation requests
+  // concurrently and stream back results as they are computed.
+  rpc CalculateBatch (stream CalculateRequest) returns (stream CalculateResponse);
+}
+
+// =============================================================================
+// Message Definitions
+// =============================================================================
+//
+// In protobuf, every field is given a unique *field number* (the "= N" part).
+// Field numbers are used in the binary encoding — they never appear as strings
+// on the wire, which is why protobuf is so compact compared with JSON or XML.
+//
+// Field numbers 1–15 occupy one byte; 16–2047 occupy two bytes.  Put your
+// most frequently used fields in the 1–15 range for maximum efficiency.
+//
+// All fields are optional in proto3 (the default value is used when absent):
+//   - numeric types default to 0
+//   - string/bytes default to ""
+//   - booleans default to false
+//   - enums default to the first value (which must be 0 in proto3)
+// =============================================================================
+
+// CalculateRequest carries the operands and the desired operation.
+message CalculateRequest {
+  // Left-hand operand.  'double' maps to IEEE 754 64-bit float.
+  double a = 1;
+
+  // Right-hand operand.
+  double b = 2;
+
+  // The arithmetic operation to perform (see enum below).
+  Operation operation = 3;
+
+  // Caller-supplied identifier so responses can be correlated with requests
+  // in streaming scenarios where order is not guaranteed.
+  string request_id = 4;
+}
+
+// CalculateResponse carries the result and contextual metadata.
+message CalculateResponse {
+  // The computed numeric result.  Zero when success == false.
+  double result = 1;
+
+  // Human-readable name of the operation that was performed (e.g. "ADD").
+  string operation_name = 2;
+
+  // Echoed back from the request so the caller can correlate messages.
+  string request_id = 3;
+
+  // True when the computation succeeded without errors.
+  bool success = 4;
+
+  // Non-empty when success == false; describes the error condition.
+  // Note: in production you would typically use gRPC status codes +
+  // google.rpc.Status for structured error details instead of a plain
+  // string field.  Both approaches are shown in the server code.
+  string error_message = 5;
+
+  // Unix epoch timestamp in milliseconds recorded by the server when the
+  // response was produced.  Useful for latency measurements and auditing.
+  int64 timestamp_ms = 6;
+}
+
+// Operation enumerates the four supported arithmetic operations.
+//
+// In proto3 the first enum value MUST be 0.  This zero value is also the
+// default when the field is absent, so ADD (= 0) is the default operation.
+enum Operation {
+  ADD      = 0;
+  SUBTRACT = 1;
+  MULTIPLY = 2;
+  DIVIDE   = 3;
+}

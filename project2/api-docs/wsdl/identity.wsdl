@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:tns="http://insurance.com/identity"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://insurance.com/identity"
+    name="IdentityVerificationService">
+
+    <!-- ============================================================
+         TYPE DEFINITIONS
+         XSD inline schema defining the request/response message types
+         used by the VerifyIdentity operation.
+    ============================================================ -->
+    <wsdl:types>
+        <xsd:schema targetNamespace="http://insurance.com/identity"
+                    elementFormDefault="qualified">
+
+            <!-- Request element: sent by the client to verify a claimant's identity -->
+            <xsd:element name="verifyIdentityRequest">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <!--
+                            policyNumber: the insurance policy number.
+                            Expected format: POL-XXXXXX (e.g. POL-123456).
+                            Used as the primary lookup key.
+                        -->
+                        <xsd:element name="policyNumber" type="xsd:string"/>
+                        <!--
+                            claimantName: full legal name of the person filing the claim.
+                        -->
+                        <xsd:element name="claimantName" type="xsd:string"/>
+                        <!--
+                            dateOfBirth: claimant's date of birth in ISO-8601 format
+                            (YYYY-MM-DD), used for identity cross-checking.
+                        -->
+                        <xsd:element name="dateOfBirth" type="xsd:string"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+
+            <!-- Response element: returned by the service with the verification outcome -->
+            <xsd:element name="verifyIdentityResponse">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <!--
+                            verificationStatus: outcome of the identity check.
+                            Possible values:
+                              - VERIFIED : identity confirmed automatically
+                              - FAILED   : identity could not be confirmed
+                              - PENDING  : manual review required
+                        -->
+                        <xsd:element name="verificationStatus" type="xsd:string"/>
+                        <!--
+                            verificationCode: unique token assigned to this verification
+                            attempt (e.g. VC-748291). Empty string when status is FAILED.
+                        -->
+                        <xsd:element name="verificationCode" type="xsd:string"/>
+                        <!--
+                            message: human-readable description of the verification result.
+                        -->
+                        <xsd:element name="message" type="xsd:string"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+
+        </xsd:schema>
+    </wsdl:types>
+
+    <!-- ============================================================
+         MESSAGE DEFINITIONS
+         Abstract message types referencing the XSD elements above.
+    ============================================================ -->
+
+    <!-- Input message for the VerifyIdentity operation -->
+    <wsdl:message name="VerifyIdentityRequestMessage">
+        <wsdl:part name="parameters" element="tns:verifyIdentityRequest"/>
+    </wsdl:message>
+
+    <!-- Output message for the VerifyIdentity operation -->
+    <wsdl:message name="VerifyIdentityResponseMessage">
+        <wsdl:part name="parameters" element="tns:verifyIdentityResponse"/>
+    </wsdl:message>
+
+    <!-- ============================================================
+         PORT TYPE (Abstract Interface)
+         Defines the operations exposed by the service without
+         committing to a concrete transport or encoding.
+    ============================================================ -->
+    <wsdl:portType name="IdentityVerificationPortType">
+        <!--
+            VerifyIdentity: synchronous request/response operation.
+            A client submits policy and claimant details; the service
+            returns a verification status, a unique code, and a message.
+        -->
+        <wsdl:operation name="VerifyIdentity">
+            <wsdl:input  message="tns:VerifyIdentityRequestMessage"
+                         name="VerifyIdentityRequest"/>
+            <wsdl:output message="tns:VerifyIdentityResponseMessage"
+                         name="VerifyIdentityResponse"/>
+        </wsdl:operation>
+    </wsdl:portType>
+
+    <!-- ============================================================
+         BINDING
+         Binds the abstract portType to SOAP 1.1 using the
+         document/literal style (WS-I Basic Profile compliant).
+    ============================================================ -->
+    <wsdl:binding name="IdentityVerificationSoapBinding"
+                  type="tns:IdentityVerificationPortType">
+
+        <soap:binding style="document"
+                      transport="http://schemas.xmlsoap.org/soap/http"/>
+
+        <wsdl:operation name="VerifyIdentity">
+            <!-- SOAPAction header value (empty string is valid for doc/literal) -->
+            <soap:operation soapAction="http://insurance.com/identity/VerifyIdentity"
+                            style="document"/>
+            <wsdl:input name="VerifyIdentityRequest">
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output name="VerifyIdentityResponse">
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
+
+    </wsdl:binding>
+
+    <!-- ============================================================
+         SERVICE
+         Concrete network address where the binding is deployed.
+         Port 8082 matches the Spring Boot server.port property.
+    ============================================================ -->
+    <wsdl:service name="IdentityVerificationService">
+        <wsdl:port name="IdentityVerificationPort"
+                   binding="tns:IdentityVerificationSoapBinding">
+            <soap:address location="http://localhost:8082/ws/identity"/>
+        </wsdl:port>
+    </wsdl:service>
+
+</wsdl:definitions>

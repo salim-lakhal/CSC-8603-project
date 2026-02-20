@@ -1,0 +1,16 @@
+{
+  "name": "graphql-calculator-demo",
+  "version": "1.0.0",
+  "description": "GraphQL calculator example for CSC8603 assignment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "client": "node client.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-graphql": "^0.12.0",
+    "graphql": "^15.8.0",
+    "node-fetch": "^2.7.0"
+  }
+}

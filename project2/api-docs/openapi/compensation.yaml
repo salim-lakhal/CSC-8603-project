@@ -1,0 +1,160 @@
+openapi: 3.1.0
+info:
+  title: Compensation Service
+  description: |
+    Calculates the final net compensation payable for an approved insurance claim.
+
+    Calculation formula:
+    - grossAmount  = approvedAmount
+    - netAmount    = approvedAmount - deductible
+    - taxAmount    = netAmount * 0.02  (2% administrative tax)
+    - totalPayment = netAmount - taxAmount
+
+    The deductible cannot exceed the approved amount.
+  version: 1.0.0
+  contact:
+    name: Insurance Claim Processing System
+
+servers:
+  - url: http://localhost:8087
+    description: Local development server
+
+tags:
+  - name: Compensation
+    description: Operations for compensation calculation
+
+paths:
+  /compensation/calculate:
+    post:
+      tags:
+        - Compensation
+      summary: Calculate claim compensation
+      description: |
+        Computes the net compensation payable after deducting the policy deductible
+        and applying a 2% administrative tax on the net amount.
+      operationId: calculateCompensation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompensationRequest'
+            examples:
+              standardCalculation:
+                summary: Standard compensation calculation
+                value:
+                  claimId: "CLM-2024-001"
+                  approvedAmount: 31500.0
+                  claimType: "PROPERTY_DAMAGE"
+                  deductible: 500.0
+              zeroDeductible:
+                summary: Calculation with no deductible
+                value:
+                  claimId: "CLM-2024-002"
+                  approvedAmount: 20000.0
+                  claimType: "MEDICAL"
+                  deductible: 0.0
+      responses:
+        '200':
+          description: Compensation breakdown calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationResponse'
+              examples:
+                result:
+                  summary: Compensation calculation result
+                  value:
+                    claimId: "CLM-2024-001"
+                    grossAmount: 31500.0
+                    deductible: 500.0
+                    netAmount: 31000.0
+                    taxAmount: 620.0
+                    totalPayment: 30380.0
+        '400':
+          description: Invalid request - deductible exceeds approved amount or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    CompensationRequest:
+      type: object
+      required:
+        - claimId
+        - approvedAmount
+        - claimType
+        - deductible
+      properties:
+        claimId:
+          type: string
+          description: Unique claim identifier
+          example: "CLM-2024-001"
+        approvedAmount:
+          type: number
+          format: double
+          description: Amount approved by the expert assessor in USD
+          minimum: 0
+          example: 31500.0
+        claimType:
+          type: string
+          description: Category of the insurance claim
+          example: "PROPERTY_DAMAGE"
+        deductible:
+          type: number
+          format: double
+          description: Policy deductible amount to subtract from approved amount
+          minimum: 0
+          example: 500.0
+
+    CompensationResponse:
+      type: object
+      properties:
+        claimId:
+          type: string
+          description: The claim identifier
+        grossAmount:
+          type: number
+          format: double
+          description: The approved amount before deductions
+        deductible:
+          type: number
+          format: double
+          description: The deductible subtracted from the gross amount
+        netAmount:
+          type: number
+          format: double
+          description: Amount after deductible (grossAmount - deductible)
+        taxAmount:
+          type: number
+          format: double
+          description: Administrative tax (2% of netAmount)
+        totalPayment:
+          type: number
+          format: double
+          description: Final payment amount (netAmount - taxAmount)
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time

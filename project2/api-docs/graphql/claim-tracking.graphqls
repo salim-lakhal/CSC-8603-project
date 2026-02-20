@@ -1,0 +1,40 @@
+type ClaimStatus {
+  claimId: String!
+  currentStatus: Status!
+  statusHistory: [StatusEntry!]!
+  lastUpdated: String!
+  estimatedCompletionDate: String
+}
+
+type StatusEntry {
+  status: Status!
+  timestamp: String!
+  description: String!
+  updatedBy: String!
+}
+
+enum Status {
+  SUBMITTED
+  IDENTITY_VERIFIED
+  POLICY_VALIDATED
+  FRAUD_CHECKED
+  ELIGIBILITY_CONFIRMED
+  DOCUMENTS_REVIEWED
+  EXPERT_ASSESSED
+  COMPENSATION_CALCULATED
+  PAYMENT_AUTHORIZED
+  NOTIFIED
+  COMPLETED
+  REJECTED
+}
+
+type Query {
+  trackClaim(claimId: String!): ClaimStatus
+  getClaimsByStatus(status: Status!): [ClaimStatus!]!
+  getAllClaims: [ClaimStatus!]!
+}
+
+type Mutation {
+  updateClaimStatus(claimId: String!, status: Status!, description: String!, updatedBy: String!): ClaimStatus!
+  initializeClaim(claimId: String!): ClaimStatus!
+}

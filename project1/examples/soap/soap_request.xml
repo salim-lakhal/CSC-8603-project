@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOAP 1.1 Request Envelope — Calculate 15.5 + 24.3
+  ====================================================
+  A SOAP message is a standard XML document with a mandatory structure.
+  The top-level element is always <Envelope>, which wraps two child
+  elements:
+    1. <Header>  (optional) — cross-cutting concerns: security, routing,
+                              transactions, correlation IDs, etc.
+    2. <Body>    (required) — the actual payload / application data.
+
+  SOAP 1.1 Namespaces used here:
+    soapenv  → http://schemas.xmlsoap.org/soap/envelope/
+               The SOAP 1.1 envelope schema namespace.
+    cal      → http://calculator.example.com/
+               The CalculatorService application namespace (from WSDL).
+    wsse     → http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd
+               WS-Security extension namespace (OASIS WSS 1.0).
+    wsu      → http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd
+               WS-Security utility namespace (timestamps, IDs).
+
+  HTTP Transport Context
+  ----------------------
+  This XML body would be sent as an HTTP POST request with headers:
+    POST /calculator HTTP/1.1
+    Host: localhost:8080
+    Content-Type: text/xml; charset=utf-8
+    SOAPAction: "http://calculator.example.com/calculate"
+    Content-Length: <length>
+-->
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:cal="http://calculator.example.com/"
+  xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+  xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+
+  <!-- ================================================================
+       SOAP HEADER
+       The Header is optional but commonly used for:
+         - WS-Security (authentication, encryption, digital signatures)
+         - WS-Addressing (message routing, correlation IDs)
+         - WS-ReliableMessaging (delivery guarantees)
+         - Custom context (locale, tracing, client version)
+
+       Each header block can carry a mustUnderstand="1" attribute,
+       which forces the recipient to either process that header or
+       return a SOAP fault. This is the SOAP extensibility mechanism.
+       ================================================================ -->
+  <soapenv:Header>
+
+    <!--
+      WS-Security (WSS) Header Block
+      --------------------------------
+      WS-Security (WSS) is the OASIS standard for message-level security
+      in SOAP. Unlike transport-level security (HTTPS/TLS) which only
+      secures the channel, WS-Security secures the message itself —
+      allowing end-to-end security even across intermediaries.
+
+      mustUnderstand="1": the server MUST process this security header
+      or return a SOAP fault. This ensures security is never silently
+      ignored by a misconfigured intermediary.
+
+      Common WSS mechanisms:
+        - UsernameToken   : username/password (shown here)
+        - X509Certificate : PKI-based authentication
+        - SAML Token      : federated identity (enterprise SSO)
+        - Signature       : XML digital signature (non-repudiation)
+        - Encryption      : XML encryption (confidentiality)
+    -->
+    <wsse:Security soapenv:mustUnderstand="1">
+
+      <!--
+        UsernameToken: simplest WSS credential.
+        The wsu:Id attribute allows other elements to reference this
+        token (e.g. in a digital signature).
+
+        Password Types:
+          - PasswordText   : plaintext password (use only over HTTPS)
+          - PasswordDigest : SHA-1 hash of (nonce + created + password)
+                             Provides replay protection without TLS.
+      -->
+      <wsse:UsernameToken wsu:Id="UsernameToken-1">
+        <wsse:Username>api_client</wsse:Username>
+        <!--
+          PasswordText here for readability. In production, prefer
+          PasswordDigest or rely entirely on TLS client certificates.
+          Type URI identifies the password encoding scheme.
+        -->
+        <wsse:Password
+          Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">
+          s3cr3tP@ssw0rd
+        </wsse:Password>
+        <!--
+          Nonce: a random base64-encoded value used to prevent replay
+          attacks when combined with the Created timestamp.
+          Each request should use a unique nonce.
+        -->
+        <wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">
+          dGhpcyBpcyBhIG5vbmNl
+        </wsse:Nonce>
+        <!--
+          Created: ISO 8601 UTC timestamp. Servers typically reject
+          tokens older than 5 minutes to prevent replay attacks.
+        -->
+        <wsu:Created>2024-11-15T10:30:00.000Z</wsu:Created>
+      </wsse:UsernameToken>
+
+    </wsse:Security>
+  </soapenv:Header>
+
+  <!-- ================================================================
+       SOAP BODY
+       The Body contains the actual application payload.
+       In document/literal style (as declared in the WSDL binding),
+       the body contains a single XML element that conforms exactly to
+       the XSD schema — no SOAP encoding transformations.
+
+       The element name "CalculateRequest" and its namespace
+       "http://calculator.example.com/" must match the WSDL exactly.
+       This strict contract is what makes SOAP interoperable across
+       different platforms and languages.
+       ================================================================ -->
+  <soapenv:Body>
+
+    <!--
+      CalculateRequest element:
+        Matches the XSD element defined in calculator.wsdl <types>.
+        Namespace (xmlns:cal) ties this to the CalculatorService contract.
+
+      Operation: ADD — add the two operands
+      a: 15.5  (first operand)
+      b: 24.3  (second operand)
+      Expected result: 39.8
+    -->
+    <cal:CalculateRequest>
+      <!--
+        operation: must be one of ADD, SUBTRACT, MULTIPLY, DIVIDE.
+        Case-sensitive — must match server-side processing logic.
+      -->
+      <cal:operation>ADD</cal:operation>
+
+      <!--
+        a and b: xsd:double values (IEEE 754 double-precision).
+        SOAP transmits these as decimal text; the server parses them
+        according to the XSD type. This avoids binary encoding issues
+        across different hardware architectures.
+      -->
+      <cal:a>15.5</cal:a>
+      <cal:b>24.3</cal:b>
+    </cal:CalculateRequest>
+
+  </soapenv:Body>
+
+</soapenv:Envelope>

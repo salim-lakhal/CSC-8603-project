@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ============================================================
+         Parent: Spring Boot 3.2.3 manages all dependency versions
+         and provides the repackage goal for executable JAR.
+    ============================================================ -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.3</version>
+        <relativePath/> <!-- Resolve from remote Maven Central -->
+    </parent>
+
+    <!-- ============================================================
+         Project Coordinates
+    ============================================================ -->
+    <groupId>com.insurance</groupId>
+    <artifactId>identity-verification</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>identity-verification</name>
+    <description>
+        Insurance Identity Verification SOAP Web Service.
+        Demonstrates WSDL-first, contract-driven development using
+        Spring-WS with document/literal binding on Java 21.
+    </description>
+
+    <!-- ============================================================
+         Java Version — Java 21 LTS
+    ============================================================ -->
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <!-- ============================================================
+         Dependencies
+    ============================================================ -->
+    <dependencies>
+
+        <!--
+            Spring Web Services core starter.
+            Pulls in spring-ws-core, spring-oxm, saaj-impl, and the
+            MessageDispatcherServlet infrastructure required to expose
+            SOAP endpoints.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web-services</artifactId>
+        </dependency>
+
+        <!--
+            wsdl4j: required by Spring-WS DefaultWsdl11Definition to
+            parse and serve the WSDL 1.1 document at runtime.
+        -->
+        <dependency>
+            <groupId>wsdl4j</groupId>
+            <artifactId>wsdl4j</artifactId>
+        </dependency>
+
+        <!--
+            Spring Boot Actuator: exposes /actuator/health and /actuator/info
+            endpoints for production readiness checks and container probes.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ========================================================
+             Test Dependencies
+        ======================================================== -->
+
+        <!--
+            Spring Boot Test: JUnit 5, Mockito, MockMvc, and
+            @SpringBootTest integration test support.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Spring-WS Test: SoapUI-like WebServiceTemplate and
+            MockWebServiceClient for SOAP endpoint integration tests.
+        -->
+        <dependency>
+            <groupId>org.springframework.ws</groupId>
+            <artifactId>spring-ws-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ============================================================
+         Build Plugins
+    ============================================================ -->
+    <build>
+        <plugins>
+
+            <!--
+                Spring Boot Maven Plugin.
+                - repackage goal: produces a self-contained executable JAR
+                  that embeds Tomcat and all dependencies.
+                - Configured to exclude spring-boot-devtools from the
+                  final artifact (not needed in production).
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOAP 1.1 Response Envelopes — Two Examples
+  ============================================
+  This file contains two SOAP response examples:
+
+  EXAMPLE 1 (shown below): Successful response — 15.5 + 24.3 = 39.8
+  EXAMPLE 2 (see end of file): SOAP Fault — division by zero
+
+  HTTP Transport Context (Successful Response)
+  ---------------------------------------------
+  The server responds over HTTP with:
+    HTTP/1.1 200 OK
+    Content-Type: text/xml; charset=utf-8
+    Content-Length: <length>
+
+  Note: SOAP 1.1 always returns HTTP 200, even for application-level
+  errors (like "invalid input"). HTTP 500 is only used for SOAP Faults
+  — messages that the SOAP framework itself could not process.
+  This is a key difference from REST, which uses HTTP status codes
+  to convey application-level error semantics.
+-->
+
+
+<!-- ====================================================================
+     EXAMPLE 1: SUCCESSFUL SOAP RESPONSE
+     Operation: ADD — 15.5 + 24.3 = 39.8
+     ==================================================================== -->
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:cal="http://calculator.example.com/">
+
+  <!--
+    Response Header
+    ---------------
+    The Header is optional in responses. Servers may use it to return:
+      - Correlation IDs for distributed tracing
+      - WS-Addressing reply-to / message-ID headers
+      - Session tokens or refresh credentials
+      - Processing timestamps for audit logging
+    Here it is omitted for simplicity.
+  -->
+  <soapenv:Header/>
+
+  <!-- ================================================================
+       SOAP BODY — Successful Response
+       ================================================================ -->
+  <soapenv:Body>
+
+    <!--
+      CalculateResponse element:
+        Matches the XSD element defined in calculator.wsdl.
+        The namespace must match exactly to maintain contract compliance.
+    -->
+    <cal:CalculateResponse>
+      <!--
+        result: 39.8 — the computed sum of 15.5 + 24.3.
+        Returned as xsd:double. Note that IEEE 754 floating-point
+        arithmetic occasionally produces results like 39.800000000000004
+        due to binary representation. SOAP/XSD canonicalization may
+        normalize this; the exact representation depends on the server's
+        serialization library.
+      -->
+      <cal:result>39.8</cal:result>
+
+      <!--
+        operation: echoed back so the client can correlate the response
+        to the original request, especially useful in async messaging.
+      -->
+      <cal:operation>ADD</cal:operation>
+
+      <!--
+        error: empty string signals success.
+        Clients should check this field before using the result.
+      -->
+      <cal:error></cal:error>
+
+    </cal:CalculateResponse>
+
+  </soapenv:Body>
+
+</soapenv:Envelope>
+
+
+<!-- ====================================================================
+     EXAMPLE 2: SOAP FAULT RESPONSE — Division by Zero
+     ====================================================================
+
+  HTTP Transport Context (Fault Response)
+  ----------------------------------------
+  When a SOAP Fault occurs, the server returns HTTP 500:
+    HTTP/1.1 500 Internal Server Error
+    Content-Type: text/xml; charset=utf-8
+    Content-Length: <length>
+
+  SOAP Fault Structure (SOAP 1.1)
+  --------------------------------
+  A <soapenv:Fault> element has four sub-elements:
+    - faultcode   : mandatory. A qualified name categorizing the error.
+                    Standard codes:
+                      Client    → the request itself was invalid
+                                  (bad input, auth failure, etc.)
+                      Server    → the server failed to process a valid
+                                  request (internal error)
+                      MustUnderstand → a mustUnderstand header was not
+                                       understood by the recipient
+                      VersionMismatch → wrong SOAP envelope namespace
+    - faultstring : mandatory. Human-readable error description.
+    - faultactor  : optional. URI of the node that generated the fault
+                    (important in multi-hop SOAP intermediary chains).
+    - detail      : optional. Application-specific error details.
+                    Only present for Server-side faults. Absent for
+                    Client faults caused by header processing.
+
+  Design Note: SOAP Faults vs Application Errors
+  -----------------------------------------------
+  There are two ways to signal errors in SOAP:
+    1. Use a SOAP Fault (shown here) — for protocol/fatal errors.
+    2. Return a normal CalculateResponse with error field set — for
+       recoverable application-level errors (used in Example 1's schema).
+  The approach used depends on the service design and WS-* standards
+  compliance requirements.
+-->
+<!--
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:cal="http://calculator.example.com/">
+
+  <soapenv:Header/>
+
+  <soapenv:Body>
+
+    <soapenv:Fault>
+
+      <faultcode>soapenv:Server</faultcode>
+
+      <faultstring xml:lang="en">
+        Arithmetic Error: Division by zero is mathematically undefined.
+        The divisor (b) must be a non-zero value.
+      </faultstring>
+
+      <faultactor>http://localhost:8080/calculator</faultactor>
+
+      <detail>
+        <cal:CalculatorFaultDetail>
+          <cal:errorCode>DIVISION_BY_ZERO</cal:errorCode>
+          <cal:errorMessage>
+            Cannot divide 42.0 by 0.0: division by zero is undefined.
+          </cal:errorMessage>
+          <cal:requestedOperation>DIVIDE</cal:requestedOperation>
+          <cal:operandA>42.0</cal:operandA>
+          <cal:operandB>0.0</cal:operandB>
+          <cal:timestamp>2024-11-15T10:30:01.123Z</cal:timestamp>
+        </cal:CalculatorFaultDetail>
+      </detail>
+
+    </soapenv:Fault>
+
+  </soapenv:Body>
+
+</soapenv:Envelope>
+-->
+
+<!--
+  EXAMPLE 2 (ACTIVE VERSION — same content, no XML comment wrapping):
+  The Fault response below is what a server actually returns for DIVIDE
+  when b=0. It is presented as an XML comment above to keep this file
+  well-formed as a single document. In practice, the server sends one
+  Envelope per HTTP response — you would never receive two Envelopes
+  in a single response body.
+
+  Key Takeaways from SOAP Fault Design:
+  - faultcode uses a namespace prefix (soapenv:Server) — this IS a
+    qualified name referencing the SOAP 1.1 fault classification.
+  - faultstring is the human-readable message for logging/display.
+  - <detail> is extensible: you can embed any application-specific XML.
+  - Compare to REST: REST would return HTTP 422 or HTTP 400 with a JSON
+    error body. SOAP always wraps errors in the SOAP Fault structure,
+    keeping HTTP status codes secondary.
+  - Compare to gRPC: gRPC uses status codes (google.rpc.Status) with
+    a code, message, and details list — conceptually similar to Fault.
+  - Compare to GraphQL: GraphQL returns HTTP 200 with an "errors" array
+    alongside "data" — very different from SOAP's XML-centric approach.
+-->
