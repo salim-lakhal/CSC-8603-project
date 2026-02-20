@@ -70,3 +70,17 @@ curl -s -X POST http://localhost:8085/graphql \
 ```bash
 docker compose down
 ```
+
+---
+
+## Verification (20/02/2026)
+
+We cloned this repository from scratch on a clean machine to verify everything works end-to-end:
+
+1. `git clone https://github.com/salim-lakhal/CSC-8603-project.git`
+2. Installed Python/Node.js dependencies
+3. Ran all 4 Project 1 examples (SOAP, REST, GraphQL, gRPC) — all passed
+4. Built all 11 Project 2 Java services with `mvn clean package` — all 11 BUILD SUCCESS
+5. Verified docker-compose configuration
+
+All tests passed successfully on 20/02/2026.
